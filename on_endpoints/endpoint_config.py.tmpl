@@ -1,0 +1,28 @@
+[AWS_SQS_QUEUE]
+AWS_ACCOUNT_ID={{ AWS_ACCOUNT_ID }}
+region_name= {{ region_name }}
+aws_access_key={{ AWS_ACCESS_KEY }}
+aws_secret_key={{ AWS_SECRET_KEY }}
+listener_queue = {{ SQS_LISTENER_QUEUE }}
+poll_interval = 
+queue_visibility_timeout = 
+error_queue_name = None
+error_queue_visibility_timeout = 
+force_delete = False
+wait_time = 0
+max_number_of_messages =  1
+queue_url = {{ QUEUE_URL }}
+fifo_group_id = {{ FIFO_GROUP_ID }}
+
+[DAEMON]
+PID_FILE_PATH={{ PID_FILE_PATH }}/daemon_pid.pid
+DAEMON_OUTPUT_OVERWRITE=False 
+DAEMON_OUTPUT_FILE={{ DAEMON_OUTPUT_FILE_PATH }}/listener_out.log
+DAEMON_ERROR_FILE={{ DAEMON_OUTPUT_FILE_PATH }}/listener_error.log
+DAEMON_STDIN=/dev/null
+
+[ENDPOINT]
+endpoint_id=Endpoint-1
+wps_server_url=http://127.0.0.1:5000
+result_file= results.txt
+sleep_in_secs=600
