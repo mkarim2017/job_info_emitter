@@ -1,20 +1,26 @@
-variable "sqs_queue_id" {
-    description = ""
+variable "ades_basename" {
+  default = "ades-pbs-maaphec-dev-001"
 }
+
 variable "shared_credentials_file" {
   description = ""
 }
 variable "profile" {
+  default = ""
 }
 
 variable "region" {
+  default = "us-west-2"
 }
 
 variable "venue" {
+  default = ""
 }
 
 variable "project" {
+  default = "maap-hec"
 }
 
 variable "environment" {
+  default = ""
 }

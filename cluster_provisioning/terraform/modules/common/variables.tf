@@ -1,6 +1,3 @@
-variable "sqs_queue_id" {
-    description = ""
-}
 variable "shared_credentials_file" {
   description = ""
 }
@@ -19,3 +16,6 @@ variable "project" {
 variable "environment" {
 }
 
+variable "ades_basename" {
+  default = "ades-pbs-maaphec-dev-001"
+}

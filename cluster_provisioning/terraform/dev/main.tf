@@ -7,7 +7,7 @@ provider "aws" {
 module "common" {
   source = "../modules/common"
 
-  sqs_queue_id             = var.sqs_queue_id
+  ades_basename            = var.ades_basename
   shared_credentials_file  = var.shared_credentials_file
   profile                  = var.profile
   region                   = var.region
