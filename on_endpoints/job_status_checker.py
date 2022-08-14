@@ -1,4 +1,5 @@
 #/usr/bin/env python
+
 '''
 a sample daemonization script for the sqs listener
 '''
