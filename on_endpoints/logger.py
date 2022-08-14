@@ -12,28 +12,25 @@ import socket
 class ADESLogger:
     __ades_logger = None
     
-    #def __init__(self, file_dir, name, source_type, endpoint_id):
-    def __init__(self, file_dir,  endpoint_id):
+    def __init__(self, log_file):
         """
         Configures a logger to write log lines to /file_dir/name.adesEmmitter.log with
         format <timestamp>, <host>, <source_type>, <endpoint_id>, <metric_key>, <metric_value>
 
         Args:
-          file_dir (str): a full path to where to store the log file
-          endpoint_id (str): id of log
+          log_file (str): Log file name with full path"
         """
+
         if ADESLogger.__ades_logger != None:
             raise Exception("ADESLogger already existed. Please use ADESLogger.get_ades_logger() instead")
-        
-        # use Python logging module to log
-        #self._logger = ADESLogger.__get_logger(file_dir, name, source_type, endpoint_id)
-        self._logger = ADESLogger.__get_logger(file_dir, endpoint_id)
+    
+        self._logger = ADESLogger.__get_logger(log_file)
  
         # restrict the instantiation of a class to one "single" instance
         ADESLogger.__ades_logger = self
         
     @staticmethod
-    def __get_logger(file_dir, endpoint_id):
+    def __get_logger(log_file):
         """
         Configures Python logger
         """
@@ -41,28 +38,32 @@ class ADESLogger:
         #host = urllib.request.urlopen('https://ifconfig.me').read().decode('utf8')
         hostname = socket.gethostname()
         host = socket.gethostbyname(hostname)
-        '''
-        # preprocess arguments
-        source_type = source_type.strip().lower()
-        endpoint_id = endpoint_id.strip().lower()
-        '''
+
+        file_dir, file_name = os.path.split(log_file)
+        if not file_dir or len(file_dir) == 0:
+            file_dir = os.getcwd()
+
+        if not file_name or len(file_name) == 0:
+            file_name = "ADESMetricsEmmitter_"+hostname.split('.')[0]+ ".log"
+
 
         # if the directory containing the output log file doesn't exist,
         # create one
         os.makedirs(file_dir, exist_ok = True)
-        file_path = os.path.join(file_dir, "ADESEmmitter_"+hostname.split('.')[0]+ "_{}.log".format(endpoint_id))
+        file_path = os.path.join(file_dir, file_name)
 
         # define the log format. By default, python logging module already
         # provides timestamp when logging
 
-        
+        '''
         log_format = ("\'%(asctime)s.%(msecs)03d\',"
                       "\'" + hostname + "\',"
                       "\'" + host + "\',"
                       "\'" + endpoint_id + "\'," 
                       "%(metric_key)s,"
                       "%(metric_value)s")
-        
+        '''
+
         log_format = ("%(metric_key)s+++"
                       "%(metric_value)s")
         datefmt = '%Y-%m-%d %H:%M:%S'

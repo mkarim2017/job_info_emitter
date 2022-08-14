@@ -319,9 +319,12 @@ class JobInfoProcessor():
         return job_payload, total_job_metrics
 
 
-def main():
+def main(server_ip="127.0.0.1", server_port="5000", log_file=""):
+    global wps_server
     log_file_json = "data.json"
     adesLogger = None
+
+    wps_server = "http://{}:{}".format(server_ip, server_port)
 
     JIP = JobInfoProcessor()
     job_payload, job_metrics = JIP.get_job_metrics()
@@ -335,7 +338,7 @@ def main():
         print(str(e))
         print('Instantiating ..')
         endpoint_id = "ades"
-        adesLogger = ADESLogger(os.getcwd(), endpoint_id)
+        adesLogger = ADESLogger(log_file)
         
     for job in job_payload.keys():
         payload = job_payload[job]
@@ -351,9 +354,16 @@ def main():
 
 if __name__ == '__main__':
     #main()
+    parser = argparse.ArgumentParser("Tool to retrieve metrics information from ADES server")
+    parser.add_argument("--output_log", required=True, help="Output Log File Name with Full Path")
+    parser.add_argument("--server_ip", required=False, default="127.0.0.0", help="Flex Server IP Address")
+    parser.add_argument("--server_port", required=False, default="5000", help="Flex Server Port")
+    args = parser.parse_args()
+    
+    
     while (1):
         try:
-            main()
+            main(args.server_ip, args.server_port, args.output_log)
         except Exception as err:
             print("Error : {}".format(str(err)))
             traceback.print_exc()
