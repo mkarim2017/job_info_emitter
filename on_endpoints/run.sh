@@ -1,0 +1,1 @@
+docker run -ti -v <log_file_dir>:<log_file_dir> <image_id> /home/ops/job_info_emitter/on_endpoints/job_metrics_checker.py --output_log <log_file_dir>/<log_file_name> --server_ip SERVER_IP] [--server_port SERVER_PORT
