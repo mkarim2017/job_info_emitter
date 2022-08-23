@@ -43,6 +43,10 @@ host = socket.gethostbyname(hostname)
 
 SLEEP_TIME=60
 
+prev_job_status = set()
+prev_jobs = set()
+
+
 class MyParser(argparse.ArgumentParser):
     def error(self, message):
         sys.stderr.write('error: %s\n' % message)
@@ -241,6 +245,10 @@ class JobInfoProcessor():
         total_job_data = []
         total_job_metrics = {}
 
+        job_status_set = set()
+        jobs_set = set()
+
+
         processes = json.loads(self.getProcesses()).get("processes", [])
         for process in processes:
             process_info = process
@@ -286,6 +294,9 @@ class JobInfoProcessor():
                 job_statusInfo = job_data["statusInfo"]
                 job["username"] = job_statusInfo["username"]
                 job_status = job_statusInfo["status"].strip().lower()
+                job_status_set.add((job_statusInfo["jobID"], job_status))
+                jobs_set.add(job_statusInfo["jobID"])
+
                 print("job_status : {}".format(job_status))
                 if job_status=="successful" or job_status=="failed":
                     exit_code=1
@@ -303,23 +314,40 @@ class JobInfoProcessor():
                     total_job_data.append(payload)
                 
         total_job_metrics["job"] = total_job_data
-        return job_payload, total_job_metrics
+        return job_payload, total_job_metrics, job_status_set, jobs_set
 
 
-def main(server_ip="127.0.0.1", server_port="5000", log_file=""):
-    global wps_server
+def main():
+
+    global prev_job_status
+    global prev_jobs
+
     log_file_json = "data.json"
     adesLogger = None
-
-    wps_server = "http://{}:{}".format(server_ip, server_port)
 
     JIP = JobInfoProcessor()
     print(json.dumps(JIP.getLandingPage(), indent=2))
     #exit(0)
-    job_payload, job_metrics = JIP.get_job_metrics()
+    job_payload, job_metrics, job_status_set, jobs_set = JIP.get_job_metrics()
     #job_payload, job_metrics = JIP.get_job_metrics_from_log(log_file_json)
 
     print("main : job_payload type : {}".format(type(job_payload)))
+
+   
+    new_only_status = job_status_set - prev_job_status
+    print("new_only_status : {}".format(new_only_status))
+    new_jobs = []
+    for j in new_only_status:
+        new_jobs.append(j[0])
+    print("new_jobs : {}".format(new_jobs))
+
+    old_only_jobs = prev_jobs - jobs_set
+    new_only_jobs = jobs_set - prev_jobs
+
+    prev_job_status = job_status_set
+    prev_jobs = jobs_set
+
+    print("new_only_jobs : {}".format(new_only_jobs))
 
     try:  
         adesLogger = ADESLogger.get_logger()
@@ -327,10 +355,15 @@ def main(server_ip="127.0.0.1", server_port="5000", log_file=""):
         print(str(e))
         print('Instantiating ..')
         endpoint_id = "ades"
-        adesLogger = ADESLogger(log_file)
+        adesLogger = ADESLogger(os.getcwd(), endpoint_id)
         
     for job in job_payload.keys():
         payload = job_payload[job]
+        job_id = payload['payload_id'] 
+        if job_id not in new_jobs:
+            print("{} NOT in {}".format(job_id, new_jobs))
+            continue
+
         payload_str = ''
         for k in payload.keys():
             if len(payload_str)>0:
@@ -343,16 +376,9 @@ def main(server_ip="127.0.0.1", server_port="5000", log_file=""):
 
 if __name__ == '__main__':
     #main()
-    parser = argparse.ArgumentParser("Tool to retrieve metrics information from ADES server")
-    parser.add_argument("--output_log", required=True, help="Output Log File Name with Full Path")
-    parser.add_argument("--server_ip", required=False, default="127.0.0.0", help="Flex Server IP Address")
-    parser.add_argument("--server_port", required=False, default="5000", help="Flex Server Port")
-    args = parser.parse_args()
-    
-    
     while (1):
         try:
-            main(args.server_ip, args.server_port, args.output_log)
+            main()
         except Exception as err:
             print("Error : {}".format(str(err)))
             traceback.print_exc()
