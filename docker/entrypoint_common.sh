@@ -30,3 +30,4 @@ gosu 0:0 chown -R $UID:$GID $HOME/verdi/run 2>/dev/null || true
 
 # update ownership of other files
 gosu 0:0 chown -R $UID:$GID /var/run/docker.sock 2>/dev/null || true
+gosu $UID:$GID "$@"
