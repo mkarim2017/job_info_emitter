@@ -11,6 +11,7 @@ import json
 import logging
 import configparser
 import requests
+import configparser
 import argparse
 import urllib
 from urllib.parse import urljoin
@@ -357,15 +358,31 @@ def main(server_ip="127.0.0.1", server_port="5000", log_file=""):
 if __name__ == '__main__':
     #main()
     parser = argparse.ArgumentParser("Tool to retrieve metrics information from ADES server")
-    parser.add_argument("--output_log", required=True, help="Output Log File Name with Full Path")
+    parser.add_argument("--output_log", required=False, help="Output Log File Name with Full Path")
     parser.add_argument("--server_ip", required=False, default="127.0.0.0", help="Flex Server IP Address")
     parser.add_argument("--server_port", required=False, default="5000", help="Flex Server Port")
+    parser.add_argument("--config", required=False,
+                        help="Optionally specify a config file with full path with other parameter info")
     args = parser.parse_args()
     
     
     while (1):
+        server_ip = args.server_ip
+        server_port = args.server_port
+        output_log = args.output_log
+        print("{} : {} : {}".format(server_ip, server_port, output_log))
+
+        if args.config:
+            CONFIG_FILE_PATH = r'{}'.format(args.config)
+            config = configparser.ConfigParser()
+            config.read(CONFIG_FILE_PATH)
+            server_ip  = config["ADES_SERVER"].get("server_ip", server_ip)
+            server_port  = config["ADES_SERVER"].get("server_port", server_port)
+            output_log  = config["ADES_SERVER"].get("output_log", output_log)
+
         try:
-            main(args.server_ip, args.server_port, args.output_log)
+            print("{} : {} : {}".format(server_ip, server_port, output_log))
+            main(server_ip, server_port, output_log)
         except Exception as err:
             print("Error : {}".format(str(err)))
             traceback.print_exc()
