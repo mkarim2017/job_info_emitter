@@ -32,9 +32,11 @@ RUN sudo echo "autorefresh=1" >> /etc/yum.repos.d/logstash.repo
 
 RUN sudo yum install -y -q logstash
 
-RUN sudo chown -R logstash.logstash /usr/share/logstash
-RUN sudo chmod 777 /usr/share/logstash/data
+RUN sudo chown --recursive logstash.logstash /usr/share/logstash
+RUN sudo chmod 777 --recursive /usr/share/logstash/data
 
+RUN sudo chown --recursive logstash.logstash /var/log/logstash
+RUN sudo chmod 777 --recursive /var/log/logstash
 
 
 #COPY install_Logstash.sh /usr/local/bin/install_Logstash.sh
