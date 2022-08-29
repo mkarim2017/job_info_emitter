@@ -6,6 +6,8 @@ LABEL description="MAAP HEC Data Emitter"
 
 ARG HOME=/home/ops
 
+ENV PATH=$HOME/verdi/bin:${PATH} 
+
 # link configs
 # RUN set -ex \
 # && ln -sf /home/ops/verdi/etc/celeryconfig.py /home/ops/verdi/ops/hysds/celeryconfig.py
