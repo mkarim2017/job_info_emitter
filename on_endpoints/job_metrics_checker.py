@@ -359,7 +359,7 @@ if __name__ == '__main__':
     #main()
     parser = argparse.ArgumentParser("Tool to retrieve metrics information from ADES server")
     parser.add_argument("--output_log", required=False, help="Output Log File Name with Full Path")
-    parser.add_argument("--server_ip", required=False, default="127.0.0.0", help="Flex Server IP Address")
+    parser.add_argument("--server_ip", required=False, default="127.0.0.1", help="Flex Server IP Address")
     parser.add_argument("--server_port", required=False, default="5000", help="Flex Server Port")
     parser.add_argument("--config", required=False,
                         help="Optionally specify a config file with full path with other parameter info")

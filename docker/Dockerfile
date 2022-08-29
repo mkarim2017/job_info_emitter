@@ -7,8 +7,8 @@ LABEL description="MAAP HEC Data Emitter"
 ARG HOME=/home/ops
 
 # link configs
-RUN set -ex \
- && ln -sf /home/ops/verdi/etc/celeryconfig.py /home/ops/verdi/ops/hysds/celeryconfig.py
+# RUN set -ex \
+# && ln -sf /home/ops/verdi/etc/celeryconfig.py /home/ops/verdi/ops/hysds/celeryconfig.py
 
 # set default supervisord conf and copy includes
 COPY --chown=ops:ops ./supervisord.conf /home/ops/verdi/etc/supervisord.conf
@@ -38,6 +38,8 @@ RUN sudo chmod 777 --recursive /usr/share/logstash/data
 RUN sudo chown --recursive logstash.logstash /var/log/logstash
 RUN sudo chmod 777 --recursive /var/log/logstash
 
+RUN sudo chown --recursive logstash.logstash /var/lib/logstash
+RUN sudo chmod 777 --recursive /var/lib/logstash
 
 #COPY install_Logstash.sh /usr/local/bin/install_Logstash.sh
 #RUN sudo chmod +x /usr/local/bin/install_Logstash.sh
@@ -50,4 +52,3 @@ ENTRYPOINT ["/entrypoint_common.sh"]
 EXPOSE 5000
 WORKDIR $HOME
 CMD ["supervisord"]
-CMD ["/bin/bash", "--login"]
