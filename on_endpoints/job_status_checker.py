@@ -1,7 +1,7 @@
 #/usr/bin/env python
 
 '''
-a sample daemonization script for the sqs listener
+Checking JOB STatus
 '''
 import os
 import sys
@@ -19,11 +19,12 @@ import datetime
 import hashlib
 import traceback
 import random
+import datetime
 from uuid import uuid4
 from logger import ADESLogger
 import argparse
 
-SLEEP_TIME=60
+SLEEP_TIME=20
 
 prev_job_status = set()
 prev_jobs = set()
@@ -50,7 +51,7 @@ class JobStatusProcessor():
         return hashlib.md5(data.encode()).hexdigest()[0:8]
 
     def get_job_status(self):
-        job_status = set()
+        job_status_set = set()
         job_set = set()
         job_payload = {}
         process_ids = []
@@ -63,7 +64,7 @@ class JobStatusProcessor():
             jobs = json.loads(self.getJobList(process_id)).get("jobs", [])
         
             for job in jobs:
-                print(json.dumps(job, indent=2))
+                #print(json.dumps(job, indent=2))
                 num = random.randint(1000, 10000)
                 job_json = {} 
                 priority = num%10
@@ -72,9 +73,9 @@ class JobStatusProcessor():
                 backend_info = json.loads(job['backend_info'])
                 input_info = json.loads(job['inputs'])
                 proc_id = job["procID"]
-                print("BACKEND_INFO : {}".format(json.dumps(backend_info, indent=2)))
-                print("INPUT_INFO : {}".format(json.dumps(input_info, indent=2)))
-                print("PROCESS_INFO : {}".format(json.dumps(process_info, indent=2)))
+                #print("BACKEND_INFO : {}".format(json.dumps(backend_info, indent=2)))
+                #print("INPUT_INFO : {}".format(json.dumps(input_info, indent=2)))
+                #print("PROCESS_INFO : {}".format(json.dumps(process_info, indent=2)))
                 job_uid = "NA"
 
                 try:
@@ -95,7 +96,7 @@ class JobStatusProcessor():
                 j_status = job_statusInfo["status"].strip().lower()
                 job_id = job_statusInfo["jobID"]
                 job_metrics_data = job_statusInfo.get("metrics", {})
-                print(json.dumps(job_metrics_data, indent=2))
+                #print(json.dumps(job_metrics_data, indent=2))
                 
                 job_info = {}
                 job_info['id'] = job_id
@@ -113,18 +114,17 @@ class JobStatusProcessor():
 
 
                 job_info['execute_node'] = hostname
-                job_id_hex = self.get_hex_hash(job_id)
+                job_id_hex = "{}-{}".format(self.get_hex_hash(job_id), self.get_hex_hash(j_status))
 
           
-                job_status.add((job_id_hex, j_status))
-                job_set.add(job_id_hex)
+                job_status_set.add((job_statusInfo["jobID"], j_status))
+                job_set.add(job_statusInfo["jobID"])
                         
                 facts = {}
                 facts['hysds_public_ip'] = host
                 facts['ec2_instance_type'] = hostname
                 facts['hysds_execute_node'] = hostname
 
-                job_json = {}
                 job_json = {}
                 job_json['job_info'] = job_info
                 job_json['container_image_name'] = process_info['owsContextURL'].split('/')[-1]
@@ -162,18 +162,18 @@ class JobStatusProcessor():
                 job_json['container_mappings'] = container_mappings
                 #payload['@timestamp'] = job['timestamp']
                 payload['status'] = j_status
-                payload['tags'] = [process_info['keywords'], endpoint_id]
+                payload['tags'] = endpoint_id
                 job_json['endpoint_id'] = job_info["ades_id"]
                 payload['@version'] = '1'
                 payload['dedup'] = True
-                payload['job'] = job
+                payload['job'] = job_json
                 payload['type'] = process_info['id']
                 uuid = str(uuid4())
                 payload['uuid'] = uuid
                 payload['payload_hash'] = hashlib.md5(json.dumps(payload).encode()).hexdigest()
                 job_payload[job_id_hex] = payload
 
-        return job_status, job_set, job_payload 
+        return job_status_set, job_set, job_payload 
 
     def submit_request(self, href, request_type, expected_response_code=200, payload_data=None, timeout=None):
 
@@ -354,6 +354,14 @@ def main(server_ip="127.0.0.1", server_port="5000", log_file=None, endpoint_id="
 
     new_only_jobs, old_only_jobs, new_only_status, job_payload = file_based()
 
+    new_jobs = {}
+    for j in new_only_status:
+        new_jobs[j[0]]=j[1]
+    print("job with new status : {}".format(new_jobs))
+
+    print("new_only_jobs : {}".format(new_only_jobs))
+    print("new_only_status : {}".format(new_only_status))
+
     adesLogger = None
 
     try:  
@@ -364,17 +372,24 @@ def main(server_ip="127.0.0.1", server_port="5000", log_file=None, endpoint_id="
         endpoint_id = "ades"
         adesLogger = ADESLogger(log_file) 
 
+    if len(new_jobs.keys()) == 0:
+        print("No new job or new job status")
+
     for job in job_payload.keys():
         payload = job_payload[job]
+        job_id = payload['job']['job_info']['id']
+        if job_id not in new_jobs.keys():
+            continue
+       
+        print("New job status for job : {} : {}".format(job_id, new_jobs[job_id])) 
         payload_str = ''
         for k in payload.keys():
             if len(payload_str)>0:
                 payload_str = payload_str+',{}:{}'.format(k,json.dumps(payload[k]))
             else:
                 payload_str = '{}:{}'.format(k,json.dumps(payload[k])) 
-        adesLogger.log(job, json.dumps(job_payload[job]))
+        adesLogger.log(job_id, json.dumps(job_payload[job]))
         #adesLogger.log(job, payload_str)
-    print(json.dumps(job_payload, indent=2))
     '''
     for job in old_only:
         adesLogger.log(job, 'OFFLINE')
@@ -412,5 +427,5 @@ if __name__ == '__main__':
         except Exception as err:
             print("Error : {}".format(str(err)))
             traceback.print_exc()
-        print("sleeping for {} sec ...".format(SLEEP_TIME))
+        print("{} sleeping for {} sec ...".format(datetime.datetime.now(), SLEEP_TIME))
         time.sleep(SLEEP_TIME)

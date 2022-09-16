@@ -18,6 +18,7 @@ import requests
 import socket
 import datetime
 import hashlib
+import datetime
 from uuid import uuid4
 from logger import ADESLogger
 import random
@@ -41,7 +42,7 @@ job_status_map = {"successful" : "job-completed", "accepted": "job-queued", "fai
 hostname = socket. gethostname()
 host = socket.gethostbyname(hostname)
 
-SLEEP_TIME=60
+SLEEP_TIME=20
 
 prev_job_status = set()
 prev_jobs = set()
@@ -265,8 +266,8 @@ class JobInfoProcessor():
                 backend_info = json.loads(job['backend_info'])
                 input_info = json.loads(job['inputs'])
                 proc_id = job["procID"]
-                print("BACKEND_INFO : {}".format(json.dumps(backend_info, indent=2)))
-                print("INPUT_INFO : {}".format(json.dumps(input_info, indent=2)))
+                # print("BACKEND_INFO : {}".format(json.dumps(backend_info, indent=2)))
+                # print("INPUT_INFO : {}".format(json.dumps(input_info, indent=2)))
                 job_uid = "NA"
 
                 try:
@@ -287,9 +288,9 @@ class JobInfoProcessor():
                     job_status = backend_info.get("status")
 
                 job_data = json.loads(self.getStatus(process_id, job_id))
-                print("START OF JOB STATUS")
-                print(json.dumps(job_data, indent=2))
-                print("END OF JOB STATUS")
+                # print("START OF JOB STATUS")
+                # print(json.dumps(job_data, indent=2))
+                # print("END OF JOB STATUS")
                 job["ades_id"] = job_data["ades_id"]
                 job["api_version"] = job_data["api_version"]
                 job["job_type"] = "UNKNOWN"
@@ -302,7 +303,7 @@ class JobInfoProcessor():
                 job_status_set.add((job_statusInfo["jobID"], job_status))
                 jobs_set.add(job_statusInfo["jobID"])
 
-                print("job_status : {}".format(job_status))
+                # print("job_status : {}".format(job_status))
                 if job_status=="successful" or job_status=="failed":
                     exit_code=1
                     if job_status == "successful":
@@ -314,7 +315,7 @@ class JobInfoProcessor():
                     #payload['uuid'] = job_uid
                     payload['payload_hash'] = hashlib.md5(json.dumps(payload).encode()).hexdigest()
 
-                    print(json.dumps(payload, indent=2))
+                    # print(json.dumps(payload, indent=2))
                     job_payload[payload['payload_hash']] = payload
                     total_job_data.append(payload)
                 
@@ -371,7 +372,7 @@ def main(server_ip="127.0.0.1", server_port="5000", log_file=None):
         payload = job_payload[job]
         job_id = payload['payload_id'] 
         if job_id not in new_jobs:
-            print("{} NOT in {}".format(job_id, new_jobs))
+            #print("{} NOT in {}".format(job_id, new_jobs))
             continue
 
         payload_str = ''
@@ -380,9 +381,10 @@ def main(server_ip="127.0.0.1", server_port="5000", log_file=None):
                 payload_str = payload_str+',{}:{}'.format(k,json.dumps(payload[k]))
             else:
                 payload_str = '{}:{}'.format(k,json.dumps(payload[k])) 
+        print("Writing to logger mertrics data for {}".format(job_id))
         adesLogger.log(job_id, json.dumps(job_payload[job]))
         #adesLogger.log(job, payload_str)
-    print(json.dumps(job_payload, indent=2))
+    #print(json.dumps(job_payload, indent=2))
 
 
 if __name__ == '__main__':
@@ -416,5 +418,5 @@ if __name__ == '__main__':
         except Exception as err:
             print("Error : {}".format(str(err)))
             traceback.print_exc()
-        print("sleeping for {} sec ...".format(SLEEP_TIME))
+        print("{} sleeping for {} sec ...".format(datetime.datetime.now(), SLEEP_TIME))
         time.sleep(SLEEP_TIME)
