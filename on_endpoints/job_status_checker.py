@@ -17,18 +17,13 @@ import json
 import time
 import datetime
 import hashlib
+import traceback
+import random
 from uuid import uuid4
 from logger import ADESLogger
+import argparse
 
-CONFIG_FILER_PATH = r'endpoint_config.py'
-
-config = configparser.ConfigParser()
-config.read(CONFIG_FILER_PATH)
-
-wps_server = config['ENDPOINT']['wps_server_url']
-result_file = config['ENDPOINT']['result_file']
-sleep_time = int(config['ENDPOINT']['sleep_in_secs'])
-endpoint_id = config['ENDPOINT']['endpoint_id']
+SLEEP_TIME=60
 
 prev_job_status = set()
 prev_jobs = set()
@@ -56,111 +51,129 @@ class JobStatusProcessor():
 
     def get_job_status(self):
         job_status = set()
-        jobs = set()
+        job_set = set()
         job_payload = {}
         process_ids = []
-        processes = self.getProcesses()
+        processes = json.loads(self.getProcesses()).get("processes", [])
        
-        if processes:
-            processes = json.loads(processes)
+        for process in processes:
+            process_info = process
+            #print(json.dumps(process, indent=2))
+            process_id = process["id"]
+            jobs = json.loads(self.getJobList(process_id)).get("jobs", [])
+        
+            for job in jobs:
+                print(json.dumps(job, indent=2))
+                num = random.randint(1000, 10000)
+                job_json = {} 
+                priority = num%10
+                job_id = job["jobID"]
+                print("JOB_ID : {}".format(job_id))
+                backend_info = json.loads(job['backend_info'])
+                input_info = json.loads(job['inputs'])
+                proc_id = job["procID"]
+                print("BACKEND_INFO : {}".format(json.dumps(backend_info, indent=2)))
+                print("INPUT_INFO : {}".format(json.dumps(input_info, indent=2)))
+                print("PROCESS_INFO : {}".format(json.dumps(process_info, indent=2)))
+                job_uid = "NA"
 
-            for process in processes['processes']:
-                process_ids.append(process['id'])
-            print(process_ids)
+                try:
+                    job_metadata = backend_info["api_response"]["metadata"]
+                    job_spec = backend_info["api_response"]["spec"]
+                    container_spec = job_spec["template"]["spec"]["containers"][0]
+                    container_args = container_spec["args"]
+                    container_command = container_spec["command"]
+                    container_image = container_spec["image"]
+                    job_name = job_metadata["name"]
+                    job_namespace = job_metadata["namespace"]
+                except Exception as err:
+                    job_name = backend_info.get("pbs_job_id")
+                    j_status = backend_info.get("status")
 
-            for pid in process_ids:
-                joblist = self.getJobList(pid)
+                job_data = json.loads(self.getStatus(process_id, job_id))
+                job_statusInfo = job_data["statusInfo"]
+                j_status = job_statusInfo["status"].strip().lower()
+                job_id = job_statusInfo["jobID"]
+                job_metrics_data = job_statusInfo.get("metrics", {})
+                print(json.dumps(job_metrics_data, indent=2))
+                
+                job_info = {}
+                job_info['id'] = job_id
+                job_info["ades_id"] = job_data["ades_id"]
+                endpoint_id = job_data["ades_id"]
+                job_info["api_version"] = job_data["api_version"]
+                job_info["username"] = job_statusInfo["username"]
+                job_info["job_type"] = job_statusInfo.get("job_type", "UNKNOWN")
+                job_info["time_queued"] = "{}Z".format(job_statusInfo["time_queued"]).replace('+', '.')
+                job_info["time_start"] = "{}Z".format(job_metrics_data.get("workflow", {}).get("time_start", "")).replace('+', '.')
+                job_info["time_end"] = "{}Z".format(job_metrics_data.get("workflow", {}).get("time_end", "")).replace('+', '.')
+                job_info["duration"] = "{}".format(job_metrics_data.get("workflow", {}).get("time_duration_seconds", ''))
+                job_info["status"] = j_status
+                hostname = "{}".format(job_metrics_data.get("workflow", {}).get("node", {}).get("hostname", "unknown"))
 
-                if joblist:
-                    joblist = json.loads(joblist)['jobs']
-                    for j in joblist:
-                        print(j.keys())
+
+                job_info['execute_node'] = hostname
+                job_id_hex = self.get_hex_hash(job_id)
+
           
-                        backend_info = json.loads(j['backend_info'])
-                        process_info = backend_info['process']
-                        input_info = json.loads(j['inputs'])
-                        #print(json.dumps(input_info, indent=2))                  
-                        #print(process_info.keys())
-                        #print(json.dumps(j, indent=2))
-                        #jobDesc = self.getStatus(pid,  j['jobID'])
-                        #print('JOB STATUS')
-                        #print(json.dumps(process_info, indent=2))
-                        job_id = '{}-{}-{}'.format(endpoint_id, j['jobID'],j['timestamp'].replace(':', '-'))
-                        job_id_hex = '{}-{}-{}-{}'.format(self.get_hex_hash(endpoint_id), self.get_hex_hash(datetime.datetime.now().strftime("%I:%M%p on %B %d, %Y"))[0:4],self.get_hex_hash(j['jobID']), self.get_hex_hash(j['timestamp'].replace(':', '-')))  
-                        job_status.add((job_id_hex, j['status']))
-                        jobs.add(job_id_hex)
-                        job_info = {}
-                        job_info['id'] = job_id
-                        job_info['job_queue'] = 'factotum-job_worker-small'
-                        job_info['execute_node'] = hostname
-                        job_info['duration'] = 0
+                job_status.add((job_id_hex, j_status))
+                job_set.add(job_id_hex)
                         
-                        facts = {}
-                        facts['hysds_public_ip'] = host
-                        facts['ec2_instance_type'] = hostname
-                        facts['hysds_execute_node'] = hostname
+                facts = {}
+                facts['hysds_public_ip'] = host
+                facts['ec2_instance_type'] = hostname
+                facts['hysds_execute_node'] = hostname
 
-                        job = {}
-                        job['job_info'] = job_info
-                        job['container_image_name'] = process_info['owsContextURL'].split('/')[-1]
-                        job['container_image_url'] = process_info['owsContextURL']
-                        job['retry_count'] = 0
-                        job['facts'] = facts
-                        #job['status'] = 'job-completed'
-                        job['status'] = j['status']
-                        job['name'] = job_id
-                        job['type'] = process_info['id']
-                        job['username'] = 'unknown'
-                        job['priority'] = 1
-                        job['@version'] = '1'
-                        job['tag'] = endpoint_id
-                        job["task_id"] = job_id_hex
-                        job["command"] = {}
-                        job["params"] = {}
-                        job["context"] = {}
-                        job['container_image_id'] = process_info['owsContextURL'].split('/')[-1]
-                        event = {}
-                        event['traceback'] = 'unknown'
+                job_json = {}
+                job_json = {}
+                job_json['job_info'] = job_info
+                job_json['container_image_name'] = process_info['owsContextURL'].split('/')[-1]
+                job_json['container_image_url'] = process_info['owsContextURL']
+                job_json['retry_count'] = 0
+                job_json['facts'] = facts
+                job_json['status'] = j_status
+                job_json['name'] = job_id
+                job_json['type'] = job_info["job_type"]
+                job_json['username'] = job_info["username"] 
+                job_json['priority'] = 1
+                job_json['@version'] = '1'
+                job_json['tag'] = job_info["ades_id"]
+                job_json["task_id"] = job_id_hex
+                job_json["command"] = {}
+                job_json["params"] = {}
+                job_json["context"] = {}
+                job_json['container_image_id'] = process_info['owsContextURL'].split('/')[-1]
+                event = {}
+                event['traceback'] = 'unknown'
 
-                        payload = {}
-                        #payload['_index'] = 'new_ades_sqs_test'
-                        payload['resource'] = 'job'
-                        payload['payload_id'] = job_id
-                        
-                        '''
-                        payload['short_error'] = 'unknown'
-                        payload['msg_details'] = 'unknown'
-                        payload['traceback'] = 'unknown'
-                        payload['error'] = 'unknown'
-                        '''
-                        delivery_info = {}
-                        delivery_info["redelivered"] = False
-                        delivery_info["routing_key"] = "factotum-job_worker-small"
-                        delivery_info["exchange"] = ""
-                        delivery_info["priority"] = 3
-                        job["delivery_info"]: delivery_info
+                payload = {}
+                payload['resource'] = 'job'
+                payload['payload_id'] = job_id
 
-                        container_mappings = {}
-                        container_mappings['$HOME/.netrc'] =  '/home/ops/.netrc'
-                        job['container_mappings'] = container_mappings
-                        payload['@timestamp'] = j['timestamp']
-                        #payload['status'] = 'job-completed'
-                        payload['status'] = j['status']
-                        payload['tags'] = [process_info['keywords'], endpoint_id]
-                        #payload['event'] = event
-                        #payload['user_tags'] = [process_info['keywords'], endpoint_id]
-                        #payload['dedup_job'] = 'unknown'
-                        job['endpoint_id'] = endpoint_id
-                        payload['@version'] = '1'
-                        payload['dedup'] = True
-                        payload['job'] = job
-                        payload['type'] = process_info['id']
-                        uuid = str(uuid4())
-                        payload['uuid'] = uuid
-                        payload['payload_hash'] = hashlib.md5(json.dumps(payload).encode()).hexdigest()
-                        job_payload[job_id_hex] = payload
+                delivery_info = {}
+                delivery_info["redelivered"] = False
+                delivery_info["routing_key"] = "factotum-job_worker-small"
+                delivery_info["exchange"] = ""
+                delivery_info["priority"] = 3
+                #job_json["delivery_info"]: delivery_info
 
-        return job_status, jobs, job_payload 
+                container_mappings = {}
+                container_mappings['$HOME/.netrc'] =  '/home/ops/.netrc'
+                job_json['container_mappings'] = container_mappings
+                #payload['@timestamp'] = job['timestamp']
+                payload['status'] = j_status
+                payload['tags'] = [process_info['keywords'], endpoint_id]
+                job_json['endpoint_id'] = job_info["ades_id"]
+                payload['@version'] = '1'
+                payload['dedup'] = True
+                payload['job'] = job
+                payload['type'] = process_info['id']
+                uuid = str(uuid4())
+                payload['uuid'] = uuid
+                payload['payload_hash'] = hashlib.md5(json.dumps(payload).encode()).hexdigest()
+                job_payload[job_id_hex] = payload
+
+        return job_status, job_set, job_payload 
 
     def submit_request(self, href, request_type, expected_response_code=200, payload_data=None, timeout=None):
 
@@ -326,20 +339,31 @@ def file_based():
 def redis_based():
    pass
 
-def main():
+
+def main(server_ip="127.0.0.1", server_port="5000", log_file=None, endpoint_id="pbs"):
+    global prev_job_status
+    global prev_jobs
+    global wps_server
+
+    wps_server = "http://{}:{}".format(server_ip, server_port)
+    log_file_json = "data.json"
+    adesLogger = None
+
+    if not log_file:
+        log_file = os.path.join(os.getcwd(), "ADES_log_{}.log".format(endpoint_id))
+
     new_only_jobs, old_only_jobs, new_only_status, job_payload = file_based()
 
     adesLogger = None
-
-    
 
     try:  
         adesLogger = ADESLogger.get_logger()
     except Exception as e:
         print(str(e))
         print('Instantiating ..')
-        adesLogger = ADESLogger(os.getcwd(), endpoint_id)
-        
+        endpoint_id = "ades"
+        adesLogger = ADESLogger(log_file) 
+
     for job in job_payload.keys():
         payload = job_payload[job]
         payload_str = ''
@@ -358,8 +382,35 @@ def main():
     #time.sleep(sleep_time)
 
 if __name__ == '__main__':
-    while (1):
-        main()
-        time.sleep(sleep_time)
-
+    #main()
+    parser = argparse.ArgumentParser("Tool to retrieve metrics information from ADES server")
+    parser.add_argument("--output_log", required=False, help="Output Log File Name with Full Path")
+    parser.add_argument("--server_ip", required=False, default="127.0.0.1", help="Flex Server IP Address")
+    parser.add_argument("--server_port", required=False, default="5000", help="Flex Server Port")
+    parser.add_argument("--config", required=False,
+                        help="Optionally specify a config file with full path with other parameter info")
+    args = parser.parse_args()
     
+    
+    while (1):
+        server_ip = args.server_ip
+        server_port = args.server_port
+        output_log = args.output_log
+        print("{} : {} : {}".format(server_ip, server_port, output_log))
+
+        if args.config:
+            CONFIG_FILE_PATH = r'{}'.format(args.config)
+            config = configparser.ConfigParser()
+            config.read(CONFIG_FILE_PATH)
+            server_ip  = config["ADES_SERVER"].get("server_ip", server_ip)
+            server_port  = config["ADES_SERVER"].get("server_port", server_port)
+            output_log  = config["ADES_SERVER"].get("output_log", output_log)
+
+        try:
+            print("{} : {} : {}".format(server_ip, server_port, output_log))
+            main(server_ip, server_port, output_log)
+        except Exception as err:
+            print("Error : {}".format(str(err)))
+            traceback.print_exc()
+        print("sleeping for {} sec ...".format(SLEEP_TIME))
+        time.sleep(SLEEP_TIME)
