@@ -183,6 +183,7 @@ class JobInfoProcessor():
         job_info["ades_id"] = job_data["ades_id"]
         job_info["api_version"] = job_data["api_version"]
         job_info["username"] = job_statusInfo["username"]
+        job_info["job_type"] = job_statusInfo.get("job_type", "UNKNOWN")
 
         job_info["time_queued"] = "{}Z".format(job_statusInfo["time_queued"]).replace('+', '.')
         job_info["time_start"] = "{}Z".format(job_metrics_data.get("workflow", {}).get("time_start", "")).replace('+', '.')
@@ -291,9 +292,12 @@ class JobInfoProcessor():
                 print("END OF JOB STATUS")
                 job["ades_id"] = job_data["ades_id"]
                 job["api_version"] = job_data["api_version"]
+                job["job_type"] = "UNKNOWN"
+
 
                 job_statusInfo = job_data["statusInfo"]
-                job["username"] = job_statusInfo["username"]
+                job["job_type"] = job_statusInfo.get("job_type", "UNKNOWN")
+                job["username"] = job_statusInfo.get("username", "UNKNOWN")
                 job_status = job_statusInfo["status"].strip().lower()
                 job_status_set.add((job_statusInfo["jobID"], job_status))
                 jobs_set.add(job_statusInfo["jobID"])
