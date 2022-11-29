@@ -42,6 +42,10 @@ There are another two sets of logstash run in maap-hec cluster which read from j
 
 Please see cluster_provisioning/logstash/ for configuration of the logstash.conf file for all the logstash processes.
 
+How to Run:
+
+<logstash-installation-dir>/bin/logstash -f <logstash-conf-path>/logstash.conf --log.level debug --path.data=<path of dir to save data>  --path.logs=<logs-dir>
+
 
 ## SQS Queues
 SQS queues are used to communicate between client and wpst_client_daemon. User can  create necessary queues using the terraform or python script in cluster_provisioning directory. The two quesues used for WPST Communicator are request queue and reply queue. These queue names are specified in loghstash conf file.
