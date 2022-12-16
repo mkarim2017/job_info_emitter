@@ -24,10 +24,10 @@ from logger import ADESLogger
 import random
 import traceback
 
-logger = logging.getLogger('sqs_listener')
+logger = logging.getLogger("job_metrics_checker.log")
 logger.setLevel(logging.INFO)
 
-sh = logging.FileHandler('soamc_sqs_client.log')
+sh = logging.FileHandler("job_metrics_checker.log")
 sh.setLevel(logging.INFO)
 
 formatstr = '[%(asctime)s - %(name)s - %(levelname)s]  %(message)s'
@@ -42,7 +42,7 @@ job_status_map = {"successful" : "job-completed", "accepted": "job-queued", "fai
 hostname = socket. gethostname()
 host = socket.gethostbyname(hostname)
 
-SLEEP_TIME=20
+SLEEP_TIME=60
 
 prev_job_status = set()
 prev_jobs = set()
@@ -73,10 +73,10 @@ class JobInfoProcessor():
 
     def submit_request(self, href, request_type, expected_response_code=200, payload_data=None, timeout=None):
 
-        logger.debug("submit_request : href : {} request_type : {}".format(href, request_type))
+        print("submit_request : href : {} request_type : {}".format(href, request_type))
         headers = {'Content-type': 'application/json'}
         wps_server_url = urljoin(wps_server, href)
-        logger.info("wps_server_url : {}".format(wps_server_url))
+        logger.debug("wps_server_url : {}".format(wps_server_url))
         if request_type.upper()=="GET":
             logger.debug("calling GET")
             if timeout:
@@ -101,8 +101,8 @@ class JobInfoProcessor():
             raise Exception("Invalid Request Type : {}".format(request_type))
          
         response.raise_for_status()
-        logger.info("status code: {}".format(response.status_code))
-        logger.info(json.dumps(response.json(), indent=2))
+        print("submit_request : {}  status code: {}".format(href, response.status_code))
+        logger.debug(json.dumps(response.json(), indent=2))
 
         
         assert response.status_code == int(expected_response_code)
@@ -131,6 +131,7 @@ class JobInfoProcessor():
         return self.submit_request(href, request_type)
 
     def getJobList(self, process_id):
+        print("Calling getJobList for process : {}".format(process_id))
         href = "processes/{}/jobs".format(process_id)
         request_type = "GET"
         return self.submit_request(href, request_type)        
@@ -148,6 +149,7 @@ class JobInfoProcessor():
         return json.dumps(response.json())
 
     def getStatus(self, process_id, job_id):
+        print("Calling getStatus for process : {} job : {}".format(process_id, job_id))
         href = "processes/{}/jobs/{}".format(process_id, job_id)
         request_type = "GET"
         return self.submit_request(href, request_type)
@@ -259,16 +261,25 @@ class JobInfoProcessor():
             jobs = json.loads(self.getJobList(process_id)).get("jobs", [])
         
             for job in jobs:
+                logger.debug(json.dumps(job, indent=2))
+
+                
+                num = random.randint(1000, 10000)
                 job_json = {} 
                 priority = num%10
                 job_id = job["jobID"]
-                print("JOB_ID : {}".format(job_id))
+                logger.debug("JOB_ID : {}".format(job_id))
                 backend_info = json.loads(job['backend_info'])
                 input_info = json.loads(job['inputs'])
                 proc_id = job["procID"]
-                # print("BACKEND_INFO : {}".format(json.dumps(backend_info, indent=2)))
-                # print("INPUT_INFO : {}".format(json.dumps(input_info, indent=2)))
+                metrics = json.loads(job["metrics"])
+                logger.debug("BACKEND_INFO : {}".format(json.dumps(backend_info, indent=2)))
+                logger.debug("INPUT_INFO : {}".format(json.dumps(input_info, indent=2)))
+                logger.debug("PROCESS_INFO : {}".format(json.dumps(process_info, indent=2)))
+                logger.debug("METRICS : {}".format(json.dumps(metrics, indent=2)))
                 job_uid = "NA"
+                
+
 
                 try:
                     job_metadata = backend_info["api_response"]["metadata"]
@@ -287,6 +298,7 @@ class JobInfoProcessor():
                     job_name = backend_info.get("pbs_job_id")
                     job_status = backend_info.get("status")
 
+                '''
                 job_data = json.loads(self.getStatus(process_id, job_id))
                 # print("START OF JOB STATUS")
                 # print(json.dumps(job_data, indent=2))
@@ -302,15 +314,49 @@ class JobInfoProcessor():
                 job_status = job_statusInfo["status"].strip().lower()
                 job_status_set.add((job_statusInfo["jobID"], job_status))
                 jobs_set.add(job_statusInfo["jobID"])
-
                 # print("job_status : {}".format(job_status))
+                '''
+
+
+                job_status = backend_info.get("status")
+                job_status_set.add((job_id, job_status))
+                jobs_set.add(job_id)
+
                 if job_status=="successful" or job_status=="failed":
                     exit_code=1
                     if job_status == "successful":
                         exit_code=0
-                    job_metrics_data=job_statusInfo["metrics"]
+                    job_metrics_data = metrics
 
-                    payload = self.get_payload_data(job_data)
+                    job_info = {}
+                    job_metrics_data = metrics
+                    job_step_data = job_metrics_data.get("processes", [])
+                    priority = num%10
+
+                    job_info["ades_id"] = "NA"
+                    job_info["api_version"] = "1.0"
+                    job_info["username"] = job["jobOwner"]
+                    job_info["job_type"] = process_id
+                    job_info["time_queued"] = "{}Z".format(job["timeCreated"]).replace('+', '.')
+                    job_info["time_start"] = "{}Z".format(job_metrics_data.get("workflow", {}).get("time_start", "")).replace('+', '.')
+                    job_info["time_end"] = "{}Z".format(job_metrics_data.get("workflow", {}).get("time_end", "")).replace('+', '.')
+                    job_info["duration"] = "{}".format(job_metrics_data.get("workflow", {}).get("time_duration_seconds", ''))
+                    job_info["status"] = job_status
+                    hostname = "{}".format(job_metrics_data.get("workflow", {}).get("node", {}).get("hostname", "unknown"))
+
+
+                    job_info["metrics"] = job_metrics_data
+                    job_json["job_info"] = job_info
+                    job_json["priority"] = priority
+
+
+                    payload = {}
+                    payload['resource'] = 'job'
+                    payload['payload_id'] = job_id
+                    payload['@version'] = '1'
+                    payload['dedup'] = True
+                    payload['job'] = job_json
+                    payload['status'] =  job_status_map[job_status]
 
                     #payload['uuid'] = job_uid
                     payload['payload_hash'] = hashlib.md5(json.dumps(payload).encode()).hexdigest()
@@ -337,7 +383,7 @@ def main(server_ip="127.0.0.1", server_port="5000", log_file=None):
         log_file = os.path.join(os.getcwd(), "ADES_log_{}.log".format(endpoint_id))
 
     JIP = JobInfoProcessor()
-    print(json.dumps(JIP.getLandingPage(), indent=2))
+    # print(json.dumps(JIP.getLandingPage(), indent=2))
     #exit(0)
     job_payload, job_metrics, job_status_set, jobs_set = JIP.get_job_metrics()
     #job_payload, job_metrics = JIP.get_job_metrics_from_log(log_file_json)
@@ -346,11 +392,11 @@ def main(server_ip="127.0.0.1", server_port="5000", log_file=None):
 
    
     new_only_status = job_status_set - prev_job_status
-    print("new_only_status : {}".format(new_only_status))
+    logger.info("new_only_status : {}".format(new_only_status))
     new_jobs = []
     for j in new_only_status:
         new_jobs.append(j[0])
-    print("new_jobs : {}".format(new_jobs))
+    logger.info("new_jobs : {}".format(new_jobs))
 
     old_only_jobs = prev_jobs - jobs_set
     new_only_jobs = jobs_set - prev_jobs
@@ -358,13 +404,13 @@ def main(server_ip="127.0.0.1", server_port="5000", log_file=None):
     prev_job_status = job_status_set
     prev_jobs = jobs_set
 
-    print("new_only_jobs : {}".format(new_only_jobs))
+    logger.info("new_only_jobs : {}".format(new_only_jobs))
 
     try:  
         adesLogger = ADESLogger.get_logger()
     except Exception as e:
-        print(str(e))
-        print('Instantiating ..')
+        logger.info(str(e))
+        logger.info('Instantiating ..')
         endpoint_id = "ades"
         adesLogger = ADESLogger(log_file)
         
@@ -381,7 +427,7 @@ def main(server_ip="127.0.0.1", server_port="5000", log_file=None):
                 payload_str = payload_str+',{}:{}'.format(k,json.dumps(payload[k]))
             else:
                 payload_str = '{}:{}'.format(k,json.dumps(payload[k])) 
-        print("Writing to logger mertrics data for {}".format(job_id))
+        logger.info("\n\nWRITING to logger mertrics data for {}".format(job_id))
         adesLogger.log(job_id, json.dumps(job_payload[job]))
         #adesLogger.log(job, payload_str)
     #print(json.dumps(job_payload, indent=2))
@@ -397,13 +443,12 @@ if __name__ == '__main__':
                         help="Optionally specify a config file with full path with other parameter info")
     args = parser.parse_args()
     
-    
-    while (1):
-        server_ip = args.server_ip
-        server_port = args.server_port
-        output_log = args.output_log
-        print("{} : {} : {}".format(server_ip, server_port, output_log))
+    server_ip = args.server_ip
+    server_port = args.server_port
+    output_log = args.output_log
+    logger.info("{} : {} : {}".format(server_ip, server_port, output_log))
 
+    while (1):
         if args.config:
             CONFIG_FILE_PATH = r'{}'.format(args.config)
             config = configparser.ConfigParser()
@@ -413,10 +458,10 @@ if __name__ == '__main__':
             output_log  = config["ADES_SERVER"].get("output_log", output_log)
 
         try:
-            print("{} : {} : {}".format(server_ip, server_port, output_log))
+            # print("{} : {} : {}".format(server_ip, server_port, output_log))
             main(server_ip, server_port, output_log)
         except Exception as err:
             print("Error : {}".format(str(err)))
             traceback.print_exc()
-        print("{} sleeping for {} sec ...".format(datetime.datetime.now(), SLEEP_TIME))
+        logger.info("\n\n{} sleeping for {} sec ...".format(datetime.datetime.now(), SLEEP_TIME))
         time.sleep(SLEEP_TIME)
